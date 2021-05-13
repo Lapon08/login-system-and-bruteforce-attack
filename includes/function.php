@@ -6,41 +6,62 @@
         $db_name = "bruteforce";
 
         try {
-            $db = new PDO("mysql:host=$db_host;dbname=$db_name",$db_user,$db_pass);
+            $db = new PDO("mysql:host=$db_host;dbname=$db_name;charset=utf8",$db_user,$db_pass);
             return $db;
         } catch (PDOException $e) {
             die( $e->getMessage());
         }
     }
-    function loginUser($username,$password,$db){
-        if (!empty($username) || !empty($password)) {
-            $sql = "SELECT * FROM user WHERE username=:username";
-            $stmt = $db->prepare($sql);
-            $params = array(":username" => $username);
-            $stmt-> execute($params);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($user) {
-                $verify = password_verify($password,$user['password']);
-                if ($verify) {
-                    session_start();
-                    $_SESSION['username'] = $user['username'];
-                    header("Location: index.php");
+    function loginUser($username,$password,$response,$token,$db){
+        $secret_key = "6LfsE9MaAAAAAGwftHy5aNRg-R3BLx4Z-sho9TKw";
+        // Disini kita akan melakukan komunkasi dengan google recpatcha
+        // dengan mengirimkan scret key dan hasil dari response recaptcha nya
+        $verify = file_get_contents('https://www.google.com/recaptcha/api/siteverify?secret='.$secret_key.'&response='.$_POST['g-recaptcha-response']);
+        $response = json_decode($verify);
+        if($response->success){
+            if (!empty($_SESSION['token'])) {
+                if (!empty($username) || !empty($password) ) {
+                    if ($token == $_SESSION['token']) {
+                        $db->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+                        $sql = "SELECT * FROM user WHERE username=:username";
+                        $stmt = $db->prepare($sql);
+                        $params = array(":username" => $username);
+                        $stmt-> execute($params);
+                        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+                        if ($user) {
+                            $verify = password_verify($password,$user['password']);
+                            if ($verify) {
+                                session_start();
+                                $_SESSION['username'] = $user['username'];
+                                header("Location: index.php");
+                            }else {
+                                $error = "Wrong username or password";
+                                return $error;
+                            }
+                        }else {
+                            $error = "Wrong username or password";
+                            return $error;
+                        }
+                    }else {
+                        $error = "Invalid Token" . $token ." == " . $_SESSION['token'];
+                        return $error;
+                    }
                 }else {
-                    $error = "Wrong username or password";
+                    $error = "enter your username and password";
                     return $error;
                 }
             }else {
-                $error = "Wrong username or password";
+                $error = "Invalid Token2";
                 return $error;
             }
         }else {
-            $error = "enter your username and password";
+            $error = "Invalid Captcha";
             return $error;
         }
-
     }
     function registerUser($username,$password,$db){
         if (!empty($username) || !empty($password)) {
+            $db->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
             $sql = "SELECT * FROM user WHERE username=:username ";
             $stmt = $db->prepare($sql);
             $params =array(
